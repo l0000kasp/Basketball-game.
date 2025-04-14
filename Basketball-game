@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>لعبة كرة السلة</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #87CEEB;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            background-color: #f0f0f0;
+            border: 2px solid #000;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: orange;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #powerBar {
+            width: 200px;
+            height: 20px;
+            background-color: lightgray;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        #powerIndicator {
+            height: 100%;
+            background-color: red;
+            width: 0%;
+        }
+
+        #startScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #gameOverScreen {
+            display: none;
+            text-align: center;
+        }
+
+        #scoreList {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+
+        input {
+            padding: 5px;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1>مرحبًا في لعبة كرة السلة!</h1>
+    <label for="playerName">أدخل اسمك:</label>
+    <input type="text" id="playerName" />
+    <button onclick="startGame()">ابدأ اللعبة</button>
+</div>
+
+<div id="gameScreen" style="display: none;">
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+    <button onclick="throwBall()" id="throwBtn">ارمِ الكرة</button>
+    <div id="powerBar">
+        <div id="powerIndicator"></div>
+    </div>
+</div>
+
+<div id="gameOverScreen">
+    <h2>لعبة انتهت!</h2>
+    <p id="finalScore"></p>
+    <button onclick="restartGame()">إعادة تشغيل</button>
+    <div id="scoreList"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const throwBtn = document.getElementById('throwBtn');
+    const powerIndicator = document.getElementById('powerIndicator');
+    const playerNameInput = document.getElementById('playerName');
+    const startScreen = document.getElementById('startScreen');
+    const gameScreen = document.getElementById('gameScreen');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const scoreList = document.getElementById('scoreList');
+    const finalScore = document.getElementById('finalScore');
+
+    let ball = {
+        x: 50,
+        y: 150,
+        radius: 10,
+        speedX: 0,
+        speedY: 0,
+        gravity: 0.3,
+        isMoving: false
+    };
+
+    let basket = {
+        x: 400,
+        y: 120,
+        width: 50,
+        height: 10
+    };
+
+    let score = 0;
+    let power = 0;
+    let losses = 0;
+    let playerName = "";
+    let scores = [];
+
+    function startGame() {
+        playerName = playerNameInput.value.trim();
+        if (playerName === "") {
+            alert("يرجى إدخال اسمك");
+            return;
+        }
+        score = 0;
+        losses = 0;
+        power = 0;
+        scores.push({ name: playerName, score: score }); // إضافة اللاعب الجديد مع النقاط 0
+        updateScoreList();
+
+        startScreen.style.display = "none";
+        gameScreen.style.display = "block";
+        gameOverScreen.style.display = "none";
+
+        gameLoop();
+    }
+
+    function drawBall() {
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "orange";
+        ctx.fill();
+        ctx.closePath();
+    }
+
+    function drawBasket() {
+        ctx.fillStyle = "brown";
+        ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+    }
+
+    function drawScore() {
+        ctx.fillStyle = "black";
+        ctx.font = "20px Arial";
+        ctx.fillText("Score: " + score, 10, 30);
+    }
+
+    function updateBall() {
+        if (!ball.isMoving) return;
+
+        ball.x += ball.speedX;
+        ball.y += ball.speedY;
+        ball.speedY += ball.gravity;
+
+        if (ball.y + ball.radius > canvas.height) {
+            ball.y = canvas.height - ball.radius;
+            ball.speedY *= -0.7;
+        }
+
+        // لو دخلت السلة
+        if (
+            ball.x + ball.radius > basket.x &&
+            ball.x - ball.radius < basket.x + basket.width &&
+            ball.y + ball.radius > basket.y &&
+            ball.y - ball.radius < basket.y + basket.height
+        ) {
+            score++;
+            ball.isMoving = false;
+            setTimeout(resetBall, 800);
+        }
+
+        // إذا خرجت الكرة من الشاشة يمين
+        if (ball.x - ball.radius > canvas.width) {
+            losses++;
+            ball.isMoving = false;
+            setTimeout(resetBall, 800);
+        }
+
+        // إذا تخطت الخط الأحمر (الحد السفلي)
+        if (ball.y - ball.radius > canvas.height) {
+            losses++;
+            ball.isMoving = false;
+            setTimeout(resetBall, 800);
+        }
+
+        if (losses >= 5) {
+            gameOver();
+        }
+    }
+
+    function resetBall() {
+        ball.x = 50;
+        ball.y = 150;
+        ball.speedX = 0;
+        ball.speedY = 0;
+        ball.isMoving = false;
+        power = 0;
+        updatePowerBar();
+    }
+
+    function throwBall() {
+        if (!ball.isMoving) {
+            // تحديد السرعة بناءً على القوة من 0 إلى 100
+            const speedFactor = (power / 100) * 5;  // السرعة تتراوح بين 0 و 5
+            ball.speedY = -6 - speedFactor;  // السرعة الرأسية (تتأثر بالقوة)
+            ball.speedX = 3 + (speedFactor / 2);  // السرعة الأفقية (تتأثر بالقوة)
+            ball.isMoving = true;
+            power = 0;
+            updatePowerBar();
+        }
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBall();
+        drawBasket();
+        drawScore();
+        updateBall();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function updatePowerBar() {
+        powerIndicator.style.width = `${power}%`;
+    }
+
+    // شريط القوة
+    setInterval(function() {
+        if (power < 100) {
+            power += 1;
+            updatePowerBar();
+        }
+    }, 50);
+
+    function gameOver() {
+        // تحديث النقاط في قائمة اللاعبين
+        const currentPlayer = scores.find(player => player.name === playerName);
+        if (currentPlayer) {
+            currentPlayer.score = score; // تحديث النقاط عند انتهاء اللعبة
+        }
+
+        gameScreen.style.display = "none";
+        gameOverScreen.style.display = "block";
+        finalScore.textContent = `اللاعب: ${playerName} - النقاط: ${score}`;
+        updateScoreList();
+    }
+
+    function updateScoreList() {
+        scoreList.innerHTML = "<h3>قائمة اللاعبين:</h3>";
+        scores.forEach(player => {
+            scoreList.innerHTML += `<p>${player.name}: ${player.score} نقطة</p>`;
+        });
+    }
+
+    function restartGame() {
+        gameOverScreen.style.display = "none";
+        startScreen.style.display = "flex";
+    }
+</script>
+
+</body>
+</html>
